@@ -80,6 +80,10 @@ class MainComponent extends React.Component<MainComponent.Props, MainComponent.S
         if (onClose) {
             onClose();
         }
+        const cookie = this.props.pageSettings.elements.banner?.props.cookieOnClose;
+        if (cookie) {
+            document.cookie = `${cookie.key}=${cookie.value}`;
+        }
         this.setState({ isBannerOpen: false });
     };
 
@@ -90,8 +94,17 @@ class MainComponent extends React.Component<MainComponent.Props, MainComponent.S
                 .then(err => this.handleError(err));
         }
         this.updateUser();
-        //TODO ask for cookie
-        this.setState({ isBannerOpen: true });
+        const cookie = this.props.pageSettings.elements.banner?.props.cookieOnClose;
+        let open = true;
+        if (cookie) {
+            const decodedCookieString = decodeURIComponent(document.cookie);
+            const cookies = decodedCookieString.split(';');
+            const bannerClosedCookie = cookies.find(c => c.startsWith(cookie.key));
+            if (bannerClosedCookie) {
+                open = false;
+            }
+        }
+        this.setState({ isBannerOpen: open });
     }
 
     protected async updateUser() {
@@ -171,6 +184,7 @@ class MainComponent extends React.Component<MainComponent.Props, MainComponent.S
                             BannerComponent ?
                                 <Banner
                                     open={this.state.isBannerOpen}
+                                    showDismissButton={this.props.pageSettings.elements.banner?.props.dismissButton?.show}
                                     dismissButtonLabel={this.props.pageSettings.elements.banner?.props.dismissButton?.label}
                                     dismissButtonOnClick={this.onDismissBannerButtonClick}
                                 >
