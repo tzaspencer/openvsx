@@ -27,7 +27,7 @@ export interface PageSettings {
         searchHeader?: React.ComponentType;
         reportAbuse?: React.ComponentType<{ extension: Extension } & Styleable>;
         claimNamespace?: React.ComponentType<{ extension: Extension } & Styleable>;
-        additionalRoutes?: React.ComponentType;
+        additionalRoutes?: React.ReactElement[];
         banner?: {
             content: React.ComponentType;
             props: {

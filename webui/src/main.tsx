@@ -9,8 +9,7 @@
  ********************************************************************************/
 
 import * as React from 'react';
-import { Container, AppBar, Toolbar, Typography, IconButton, CssBaseline, Box, Theme } from '@material-ui/core';
-import { WithStyles, createStyles, withStyles } from '@material-ui/styles';
+import { Container, AppBar, Toolbar, Typography, IconButton, CssBaseline, Box, Theme, makeStyles } from '@material-ui/core';
 import AccountBoxIcon from '@material-ui/icons/AccountBox';
 import BrokenImageIcon from '@material-ui/icons/BrokenImage';
 import { Route, Switch } from 'react-router-dom';
@@ -30,7 +29,7 @@ import { AdminDashboard, AdminDashboardRoutes } from './pages/admin-dashboard/ad
 import { ErrorResponse } from './server-request';
 import { Banner } from './components/banner';
 
-const mainStyles = (theme: Theme) => createStyles({
+const mainStyles = makeStyles((theme: Theme) => ({
     main: {
         display: 'flex',
         flexDirection: 'column',
@@ -59,9 +58,103 @@ const mainStyles = (theme: Theme) => createStyles({
     banner: {
         background: theme.palette.secondary.dark
     }
-});
+}));
 
-class MainComponent extends React.Component<MainComponent.Props, MainComponent.State> {
+const MainContainer: React.FunctionComponent<{ user?: UserData }> = props => {
+    const mainContext = React.useContext(MainContext);
+    const pageSettings = mainContext.pageSettings;
+    const {
+        toolbarContent: ToolbarContent,
+        footer: FooterComponent,
+        banner: BannerComponent
+    } = pageSettings.elements;
+    const classes = mainStyles();
+
+
+    const [isFooterExpanded, setIsFooterExpanded] = React.useState(false);
+
+    const bannerCookie = BannerComponent?.props.cookieOnClose;
+    let open = true;
+    if (bannerCookie) {
+        const decodedCookieString = decodeURIComponent(document.cookie);
+        const cookies = decodedCookieString.split(';');
+        const bannerClosedCookie = cookies.find(c => c.startsWith(bannerCookie.key));
+        if (bannerClosedCookie) {
+            open = false;
+        }
+    }
+    const [isBannerOpen, setIsBannerOpen] = React.useState(open);
+
+    const onDismissBannerButtonClick = () => {
+        const onClose = BannerComponent?.props.onClose;
+        if (onClose) {
+            onClose();
+        }
+        const cookie = BannerComponent?.props.cookieOnClose;
+        if (cookie) {
+            document.cookie = `${cookie.key}=${cookie.value}`;
+        }
+        setIsBannerOpen(false);
+    };
+
+    const getContentPadding = () => {
+        const footerHeight = FooterComponent?.props.footerHeight;
+        return footerHeight ? footerHeight + 24 : 0;
+    };
+
+    return <>
+        <Box className={classes.main}>
+            <AppBar position='relative'>
+                <Toolbar classes={{ root: classes.spreadHorizontally }}>
+                    <Box className={classes.alignVertically}>
+                        {ToolbarContent ? <ToolbarContent /> : null}
+                    </Box>
+                    <Box className={classes.alignVertically}>
+                        <HeaderMenu />
+                        {
+                            props.user ?
+                                <UserAvatar />
+                                :
+                                <IconButton
+                                    href={mainContext.service.getLoginUrl()}
+                                    title='Log In'
+                                    aria-label='Log In' >
+                                    <AccountBoxIcon />
+                                </IconButton>
+                        }
+                    </Box>
+                </Toolbar>
+            </AppBar>
+            {
+                BannerComponent ?
+                    <Banner
+                        open={isBannerOpen}
+                        showDismissButton={BannerComponent?.props.dismissButton?.show}
+                        dismissButtonLabel={BannerComponent?.props.dismissButton?.label}
+                        dismissButtonOnClick={onDismissBannerButtonClick}
+                    >
+                        {<BannerComponent.content />}
+                    </Banner>
+                    : null
+            }
+            <Box pb={`${getContentPadding()}px`}>
+                {props.children}
+            </Box>
+            {
+                FooterComponent ?
+                    <footer
+                        className={classes.footer}
+                        onMouseEnter={() => setIsFooterExpanded(true)}
+                        onMouseLeave={() => setIsFooterExpanded(false)} >
+                        <FooterComponent.content expanded={isFooterExpanded} />
+                    </footer>
+                    : null
+            }
+        </Box>
+    </>;
+};
+
+export class Main extends React.Component<MainComponent.Props, MainComponent.State> {
 
     constructor(props: MainComponent.Props) {
         super(props);
@@ -69,23 +162,9 @@ class MainComponent extends React.Component<MainComponent.Props, MainComponent.S
         this.state = {
             userLoading: true,
             error: '',
-            isErrorDialogOpen: false,
-            isFooterExpanded: false,
-            isBannerOpen: false
+            isErrorDialogOpen: false
         };
     }
-
-    protected onDismissBannerButtonClick = () => {
-        const onClose = this.props.pageSettings.elements.banner?.props.onClose;
-        if (onClose) {
-            onClose();
-        }
-        const cookie = this.props.pageSettings.elements.banner?.props.cookieOnClose;
-        if (cookie) {
-            document.cookie = `${cookie.key}=${cookie.value}`;
-        }
-        this.setState({ isBannerOpen: false });
-    };
 
     componentDidMount(): void {
         const searchParams = new URLSearchParams(window.location.search);
@@ -94,20 +173,9 @@ class MainComponent extends React.Component<MainComponent.Props, MainComponent.S
                 .then(err => this.handleError(err));
         }
         this.updateUser();
-        const cookie = this.props.pageSettings.elements.banner?.props.cookieOnClose;
-        let open = true;
-        if (cookie) {
-            const decodedCookieString = decodeURIComponent(document.cookie);
-            const cookies = decodedCookieString.split(';');
-            const bannerClosedCookie = cookies.find(c => c.startsWith(cookie.key));
-            if (bannerClosedCookie) {
-                open = false;
-            }
-        }
-        this.setState({ isBannerOpen: open });
     }
 
-    protected async updateUser() {
+    protected async updateUser(): Promise<void> {
         try {
             const user = await this.props.service.getUser();
             if (isError(user)) {
@@ -120,12 +188,12 @@ class MainComponent extends React.Component<MainComponent.Props, MainComponent.S
         }
     }
 
-    handleError = (err: Error | Partial<ErrorResponse>) => {
+    handleError = (err: Error | Partial<ErrorResponse>): void => {
         const error = handleError(err);
         this.setState({ error, isErrorDialogOpen: true });
     };
 
-    handleDialogClose = () => {
+    handleDialogClose = (): void => {
         this.setState({ isErrorDialogOpen: false });
     };
 
@@ -146,95 +214,51 @@ class MainComponent extends React.Component<MainComponent.Props, MainComponent.S
 
     protected renderPageContent(): React.ReactNode {
         const {
-            toolbarContent: ToolbarContent,
-            footer: FooterComponent,
-            additionalRoutes: AdditionalRoutes,
-            banner: BannerComponent
+            additionalRoutes: AdditionalRoutes
         } = this.props.pageSettings.elements;
-        const classes = this.props.classes;
         return <React.Fragment>
             <Switch>
                 <Route path={AdminDashboardRoutes.MAIN}>
                     <AdminDashboard></AdminDashboard>
                 </Route>
+
+                <Route exact path={[ExtensionListRoutes.MAIN]}
+                    render={routeProps =>
+                        <MainContainer user={this.state.user}>
+                            <ExtensionListContainer
+                                {...routeProps}
+                            />
+                        </MainContainer>
+                    } />
+                <Route path={UserSettingsRoutes.MAIN}
+                    render={routeProps =>
+                        <MainContainer user={this.state.user}>
+                            <UserSettings
+                                {...routeProps}
+                                userLoading={this.state.userLoading}
+                            />
+                        </MainContainer>
+                    } />
+                <Route path={ExtensionDetailRoutes.MAIN}
+                    render={routeProps =>
+                        <MainContainer user={this.state.user}>
+                            <ExtensionDetail
+                                {...routeProps}
+                            />
+                        </MainContainer>
+                    } />
+                {
+                    AdditionalRoutes?.map((r, i) => <MainContainer key={i} user={this.state.user}>{r}</MainContainer>)
+                }
                 <Route path='*'>
-                    <Box className={classes.main}>
-                        <AppBar position='relative'>
-                            <Toolbar classes={{ root: classes.spreadHorizontally }}>
-                                <Box className={classes.alignVertically}>
-                                    {ToolbarContent ? <ToolbarContent /> : null}
-                                </Box>
-                                <Box className={classes.alignVertically}>
-                                    <HeaderMenu />
-                                    {
-                                        this.state.user ?
-                                            <UserAvatar />
-                                            :
-                                            <IconButton
-                                                href={this.props.service.getLoginUrl()}
-                                                title='Log In'
-                                                aria-label='Log In' >
-                                                <AccountBoxIcon />
-                                            </IconButton>
-                                    }
-                                </Box>
-                            </Toolbar>
-                        </AppBar>
-                        {
-                            BannerComponent ?
-                                <Banner
-                                    open={this.state.isBannerOpen}
-                                    showDismissButton={this.props.pageSettings.elements.banner?.props.dismissButton?.show}
-                                    dismissButtonLabel={this.props.pageSettings.elements.banner?.props.dismissButton?.label}
-                                    dismissButtonOnClick={this.onDismissBannerButtonClick}
-                                >
-                                    {<BannerComponent.content />}
-                                </Banner>
-                                : null
-                        }
-                        <Box pb={`${this.getContentPadding()}px`}>
-                            <Switch>
-                                <Route exact path={[ExtensionListRoutes.MAIN]}
-                                    render={routeProps =>
-                                        <ExtensionListContainer
-                                            {...routeProps}
-                                        />
-                                    } />
-                                <Route path={UserSettingsRoutes.MAIN}
-                                    render={routeProps =>
-                                        <UserSettings
-                                            {...routeProps}
-                                            userLoading={this.state.userLoading}
-                                        />
-                                    } />
-                                <Route path={ExtensionDetailRoutes.MAIN}
-                                    render={routeProps =>
-                                        <ExtensionDetail
-                                            {...routeProps}
-                                        />
-                                    } />
-                                {AdditionalRoutes ? <AdditionalRoutes /> : null}
-                                <Route path='*'>
-                                    <Container>
-                                        <Box height='30vh' display='flex' flexWrap='wrap' justifyContent='center' alignItems='center'>
-                                            <Typography variant='h3'>Oooups...this is a 404 page.</Typography>
-                                            <BrokenImageIcon style={{ fontSize: '4rem', flexBasis: '100%' }} />
-                                        </Box>
-                                    </Container>
-                                </Route>
-                            </Switch>
-                        </Box>
-                        {
-                            FooterComponent ?
-                                <footer
-                                    className={classes.footer}
-                                    onMouseEnter={() => this.setState({ isFooterExpanded: true })}
-                                    onMouseLeave={() => this.setState({ isFooterExpanded: false })} >
-                                    <FooterComponent.content expanded={this.state.isFooterExpanded} />
-                                </footer>
-                                : null
-                        }
-                    </Box>
+                    <MainContainer user={this.state.user}>
+                        <Container>
+                            <Box height='30vh' display='flex' flexWrap='wrap' justifyContent='center' alignItems='center'>
+                                <Typography variant='h3'>Oooups...this is a 404 page.</Typography>
+                                <BrokenImageIcon style={{ fontSize: '4rem', flexBasis: '100%' }} />
+                            </Box>
+                        </Container>
+                    </MainContainer>
                 </Route>
             </Switch>
             {
@@ -247,16 +271,10 @@ class MainComponent extends React.Component<MainComponent.Props, MainComponent.S
             }
         </React.Fragment>;
     }
-
-    protected getContentPadding(): number {
-        const footerHeight = this.props.pageSettings.elements.footer?.props.footerHeight;
-        return footerHeight ? footerHeight + 24 : 0;
-    }
-
 }
 
 export namespace MainComponent {
-    export interface Props extends WithStyles<typeof mainStyles> {
+    export interface Props {
         service: ExtensionRegistryService;
         pageSettings: PageSettings;
     }
@@ -266,8 +284,5 @@ export namespace MainComponent {
         userLoading: boolean;
         error: string;
         isErrorDialogOpen: boolean;
-        isFooterExpanded: boolean;
-        isBannerOpen: boolean;
     }
 }
-export const Main = withStyles(mainStyles)(MainComponent);

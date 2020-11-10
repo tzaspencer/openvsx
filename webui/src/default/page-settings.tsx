@@ -86,8 +86,7 @@ export default function createPageSettings(theme: Theme, prefersDarkMode: boolea
             Extensions for VS Code Compatible Editors
         </Typography>;
 
-    const additionalRoutes: React.FunctionComponent = () =>
-        <Route path='/about' render={() => <About />} />;
+    const additionalRoutes: React.ReactElement[] = [<Route key='0' path='/about' render={() => <About />} />];
 
     return {
         pageTitle: 'Open VSX Registry',
