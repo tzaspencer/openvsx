@@ -46,7 +46,7 @@
         "dompurify": "^3.0.4",
         "fetch-retry": "^5.0.6",
         "lodash": "^4.17.21",
-        "markdown-it": "^13.0.1",
+        "markdown-it": "^14.1.1",
         "markdown-it-anchor": "^8.6.7",
         "prop-types": "^15.8.1",
         "punycode": "^2.3.0",
